@@ -1,4 +1,15 @@
 {
-    "name": "Sonicare BLE",
-    "render_readme": true
+  "name": "Sonicare BLE Toothbrush",
+  "content_in_root": false,
+  "domain": "sonicare_bletb",
+  "country": "any",
+  "homeassistant": "2023.6.0",
+  "render_readme": true,
+  "filename": "sonicare_bletb/manifest.json",
+  "source": "https://github.com/PatrickKalka-SeriousByte/sonicare-ble-integration",
+  "zip_release": true,
+  "version": "0.0.1",
+  "hide_default_branch": false,
+  "iot_class": "local_push",
+  "integration_type": "integration"
 }
