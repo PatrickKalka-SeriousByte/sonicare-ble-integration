@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.components import bluetooth
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class SonicareBLETBCoordinator(DataUpdateCoordinator[None]):
         self._unregister_async_handle_disconnect = None
 
     async def connect(self, ble_device):
-        self.stop()
+        await self.stop()
         _LOGGER.warning('sonicare coordinator: connecting to %s', ble_device)
         sonicare_ble = SonicareBLETB(ble_device)
         self._sonicare_ble = sonicare_ble

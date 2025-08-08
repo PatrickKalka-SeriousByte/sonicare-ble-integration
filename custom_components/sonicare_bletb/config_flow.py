@@ -35,6 +35,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, discovery_info: BluetoothServiceInfoBleak
     ) -> FlowResult:
         """Handle the bluetooth discovery step."""
+        _LOGGER.debug("Bluetooth discovery received: %s", discovery_info)
+
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
         self._discovery_info = discovery_info
@@ -53,48 +55,67 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
+            _LOGGER.debug("User selected address: %s", address)
+
             discovery_info = self._discovered_devices[address]
             local_name = discovery_info.name
+            _LOGGER.debug("Initializing device: %s (%s)", local_name, discovery_info.address)
+
             await self.async_set_unique_id(
                 discovery_info.address, raise_on_progress=False
             )
             self._abort_if_unique_id_configured()
+
             sonicare_ble = SonicareBLETB(discovery_info.device)
             try:
                 await sonicare_ble.initialise()
-            except BLEAK_EXCEPTIONS:
+            except BLEAK_EXCEPTIONS as e:
+                _LOGGER.warning("Connection failed to %s: %s", address, e)
                 errors["base"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected error")
+            except Exception as e:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected error during initialise: %s", e)
                 errors["base"] = "unknown"
             else:
+                _LOGGER.debug("Initialization succeeded, stopping device")
                 await sonicare_ble.stop()
                 return self.async_create_entry(
                     title=local_name,
-                    data={
-                        CONF_ADDRESS: discovery_info.address,
-                    },
+                    data={CONF_ADDRESS: discovery_info.address},
                 )
 
         if discovery := self._discovery_info:
+            _LOGGER.debug("Using direct discovery: %s", discovery.address)
             self._discovered_devices[discovery.address] = discovery
         else:
             current_addresses = self._async_current_ids()
+            _LOGGER.debug("Running manual discovery...")
             for discovery in async_discovered_service_info(self.hass):
-                if (
-                    discovery.address in current_addresses
-                    or discovery.address in self._discovered_devices
-                    or not any(
-                        discovery.name.startswith(local_name)
-                        for local_name in LOCAL_NAMES
-                    )
-                ):
+                _LOGGER.debug("Found device: %s (%s)", discovery.name, discovery.address)
+
+                if discovery.address in current_addresses:
+                    _LOGGER.debug("Skipping already configured device: %s", discovery.address)
                     continue
+                if discovery.address in self._discovered_devices:
+                    _LOGGER.debug("Skipping already discovered device: %s", discovery.address)
+                    continue
+                if not any(
+                    discovery.name.startswith(local_name)
+                    for local_name in LOCAL_NAMES
+                ):
+                    _LOGGER.debug(
+                        "Device %s (%s) does not match LOCAL_NAMES %s → skipped",
+                        discovery.address, discovery.name, LOCAL_NAMES
+                    )
+                    continue
+
+                _LOGGER.debug("Accepted device: %s (%s)", discovery.name, discovery.address)
                 self._discovered_devices[discovery.address] = discovery
 
         if not self._discovered_devices:
+            _LOGGER.warning("No matching Sonicare devices found.")
             return self.async_abort(reason="no_devices_found")
 
+        _LOGGER.debug("Presenting selection form with devices: %s", list(self._discovered_devices.keys()))
         data_schema = vol.Schema(
             {
                 vol.Required(CONF_ADDRESS): vol.In(
